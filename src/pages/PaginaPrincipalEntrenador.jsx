@@ -1,0 +1,368 @@
+import React, { useState, useEffect } from 'react';
+import {
+  Box, Container, Typography, Button,
+  Chip, Avatar, CircularProgress, Alert, Divider, List,
+  ListItem, ListItemText, ListItemAvatar,
+} from '@mui/material';
+import {
+  People as PeopleIcon, Event as EventIcon,
+  Group as GroupIcon, CalendarToday as CalendarIcon,
+  LocationOn as LocationIcon, School as SchoolIcon,
+  FitnessCenter as FitnessIcon,
+} from '@mui/icons-material';
+import { clubesAPI, entrenadorAPI } from '../api/index.js';
+import { useAuth } from '../components/common/AuthContext.jsx';
+import { useNavigate } from 'react-router-dom';
+
+// Paleta de colores institucional
+const COLORS = {
+  burgundy: '#800020',
+  burgundyDark: '#5C0017',
+  purple: '#7A4069',
+  cream: '#e4e4e5',
+  paper: '#FFFFFF',
+  ink: '#2B1E1E',
+  line: '#8000202E',
+  lineSoft: '#80002014',
+};
+
+// Componente base para las secciones del panel
+const TarjetaSeccion = ({ icon, eyebrow, title, action, children }) => (
+  <Box
+    sx={{
+      bgcolor: COLORS.paper,
+      borderRadius: '10px',
+      border: `1px solid ${COLORS.line}`,
+      boxShadow: '0 2px 12px #80002012',
+      display: 'flex',
+      flexDirection: 'column',
+      height: '100%',
+      overflow: 'hidden',
+    }}
+  >
+    <Box sx={{ p: { xs: 2, sm: 3 }, pb: { xs: 1.5, sm: 2 } }}>
+      <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 2 }}>
+        <Box>
+          <Typography
+            sx={{
+              color: COLORS.purple, fontSize: '0.7rem', fontWeight: 700,
+              letterSpacing: '0.12em', textTransform: 'uppercase',
+              display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.5,
+            }}
+          >
+            {icon}
+            {eyebrow}
+          </Typography>
+          <Typography variant="h6" sx={{ color: COLORS.burgundy, fontWeight: 800 }}>
+            {title}
+          </Typography>
+        </Box>
+        {action}
+      </Box>
+    </Box>
+    <Divider sx={{ borderColor: COLORS.line }} />
+    <Box sx={{ p: { xs: 2, sm: 3 }, pt: { xs: 2, sm: 2.5 }, flex: 1 }}>{children}</Box>
+  </Box>
+);
+
+// Chip de estado
+const ChipEstado = ({ label, positivo = true, sx = {} }) => (
+  <Chip
+    label={label}
+    size="small"
+    sx={{
+      height: 20, fontSize: '0.68rem', fontWeight: 700,
+      bgcolor: 'transparent',
+      border: `1px solid ${positivo ? COLORS.purple : COLORS.line}`,
+      color: positivo ? COLORS.purple : COLORS.ink,
+      ...sx,
+    }}
+  />
+);
+
+// Formatea fecha en formato corto
+const formatearFecha = (fecha) => {
+  if (!fecha) return '—';
+  const d = new Date(fecha);
+  return isNaN(d) ? '—' : d.toLocaleDateString('es-MX', { year: 'numeric', month: 'short', day: 'numeric' });
+};
+
+const PaginaPrincipalEntrenador = () => {
+  const { user, isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState('');
+  const [estadisticas, setEstadisticas] = useState({ atletasActivos: 0, eventosProximos: 0 });
+  const [infoClub, setInfoClub] = useState(null);
+  const [atletasDelClub, setAtletasDelClub] = useState([]);
+  const [eventosProximos, setEventosProximos] = useState([]);
+  const [perfilEntrenador, setPerfilEntrenador] = useState(null);
+
+  useEffect(() => {
+    if (!isAuthenticated()) { navigate('/login', { replace: true }); return; }
+    if (user && (!user.id || !user.nombre)) { navigate('/login', { replace: true }); return; }
+    cargarDatos();
+  }, [user]);
+
+  // Carga los datos del entrenador: club, atletas y eventos próximos
+  const cargarDatos = async () => {
+    try {
+      setCargando(true);
+      if (!isAuthenticated()) { setError('Usuario no autenticado'); return; }
+
+      let clubId = null;
+      try {
+        const perfilRes = await entrenadorAPI.getPerfil();
+        const perfil = perfilRes.data.entrenador || null;
+        setPerfilEntrenador(perfil);
+        clubId = perfil?.club_id || null;
+      } catch {
+        setPerfilEntrenador(null);
+      }
+
+      if (clubId) {
+        try {
+          const clubRes = await clubesAPI.getById(clubId);
+          setInfoClub(clubRes.data.club || clubRes.data);
+        } catch { setInfoClub(null); }
+
+        try {
+          const atletasRes = await clubesAPI.getAtletas(clubId);
+          const lista = atletasRes.data.atletas || atletasRes.data || [];
+          setAtletasDelClub(lista);
+          setEstadisticas(prev => ({ ...prev, atletasActivos: lista.length }));
+        } catch {
+          setAtletasDelClub([]);
+          setEstadisticas(prev => ({ ...prev, atletasActivos: 0 }));
+        }
+      }
+
+      try {
+        const [statsRes, actividadRes] = await Promise.all([
+          entrenadorAPI.getStats(),
+          entrenadorAPI.getActividad(),
+        ]);
+        setEventosProximos(actividadRes.data.actividad || []);
+        setEstadisticas(prev => ({ ...prev, eventosProximos: statsRes.data.stats?.eventos_proximos ?? 0 }));
+      } catch {
+        setEventosProximos([]);
+        setEstadisticas(prev => ({ ...prev, eventosProximos: 0 }));
+      }
+    } catch (err) {
+      console.error('Error al cargar datos:', err);
+      setError('Error al cargar los datos del dashboard');
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  if (!isAuthenticated()) return null;
+
+  if (cargando) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '80vh', bgcolor: COLORS.cream }}>
+        <CircularProgress size={60} sx={{ color: COLORS.burgundy }} />
+      </Box>
+    );
+  }
+
+  return (
+    <Box sx={{ minHeight: '100vh', bgcolor: COLORS.cream }}>
+      {/* Cabecera de bienvenida */}
+      <Box sx={{ bgcolor: COLORS.burgundy, color: '#fff', pt: { xs: 4, md: 5 }, pb: { xs: 7, md: 8 } }}>
+        <Container maxWidth="lg" sx={{ textAlign: 'center', px: { xs: 2, sm: 3 } }}>
+          <Typography sx={{ opacity: 0.7, fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase' }}>
+            IVD · Panel de Entrenador
+          </Typography>
+          <Avatar
+            sx={{
+              width: 72, height: 72, mx: 'auto', mt: 1.5, mb: 1.5,
+              bgcolor: '#FFFFFF24', fontSize: '1.7rem', fontWeight: 800,
+              border: '2px solid #FFFFFF59',
+            }}
+          >
+            {user?.nombre?.[0]}{user?.apellido_paterno?.[0] || ''}
+          </Avatar>
+          <Typography variant="h4" sx={{ fontWeight: 800, fontSize: { xs: '1.5rem', md: '2.125rem' } }}>
+            ¡Bienvenido, {user?.nombre}!
+          </Typography>
+          {infoClub && (
+            <Chip
+              icon={<GroupIcon sx={{ fontSize: 16, color: '#fff !important' }} />}
+              label={infoClub.nombre}
+              sx={{
+                mt: 1.5, bgcolor: '#FFFFFF24', color: '#fff', fontWeight: 700,
+                border: '1px solid #FFFFFF59',
+              }}
+            />
+          )}
+        </Container>
+      </Box>
+
+      <Container maxWidth="lg" sx={{ px: { xs: 2, sm: 3 }, pb: { xs: 5, md: 7 } }}>
+        {error && <Alert severity="error" sx={{ mb: 3, borderRadius: '8px' }} onClose={() => setError('')}>{error}</Alert>}
+
+        {/* Tarjeta de estadísticas (flotante) */}
+        <Box
+          sx={{
+            mt: { xs: -5, md: -6 }, mb: { xs: 3, md: 4 },
+            bgcolor: COLORS.paper, borderRadius: '10px',
+            boxShadow: '0 10px 28px #00000024',
+            display: 'grid', gridTemplateColumns: '1fr 1fr',
+            overflow: 'hidden',
+          }}
+        >
+          {[
+            { icon: <PeopleIcon sx={{ fontSize: 24 }} />, value: estadisticas.atletasActivos, label: 'Atletas del Club', sub: infoClub ? `Club ${infoClub.nombre}` : 'Sin club asignado' },
+            { icon: <EventIcon sx={{ fontSize: 24 }} />, value: estadisticas.eventosProximos, label: 'Eventos Próximos', sub: 'Competencias por venir' },
+          ].map((s, i) => (
+            <Box
+              key={i}
+              sx={{
+                p: { xs: 2, md: 2.75 }, textAlign: 'center',
+                borderRight: i === 0 ? `1px solid ${COLORS.line}` : 'none',
+              }}
+            >
+              <Box sx={{ color: i === 0 ? COLORS.burgundy : COLORS.purple, mb: 0.5, display: 'flex', justifyContent: 'center' }}>{s.icon}</Box>
+              <Typography sx={{ fontWeight: 800, color: COLORS.ink, lineHeight: 1.1, fontSize: { xs: '1.5rem', md: '1.8rem' } }}>
+                {s.value}
+              </Typography>
+              <Typography sx={{ fontSize: '0.78rem', color: COLORS.ink, fontWeight: 700, mt: 0.2 }}>{s.label}</Typography>
+              <Typography sx={{ fontSize: '0.7rem', color: COLORS.purple }}>{s.sub}</Typography>
+            </Box>
+          ))}
+        </Box>
+
+        {/* Contenido principal */}
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: { xs: 2, md: 3 }, mb: { xs: 2, md: 3 } }}>
+          {/* Atletas del club */}
+          <TarjetaSeccion icon={<PeopleIcon sx={{ fontSize: 16 }} />} eyebrow="Plantilla" title="Atletas del Club">
+            {atletasDelClub.length === 0 ? (
+              <Typography variant="body2" sx={{ color: COLORS.purple, textAlign: 'center', py: 4 }}>
+                {infoClub ? 'No hay atletas en tu club aún.' : 'No tienes un club asignado.'}
+              </Typography>
+            ) : (
+              <List disablePadding>
+                {atletasDelClub.map((a, i) => (
+                  <React.Fragment key={a.id || i}>
+                    <ListItem sx={{ px: 0, py: 1.2 }}>
+                      <ListItemAvatar>
+                        <Avatar sx={{ bgcolor: COLORS.burgundy, width: 38, height: 38, fontSize: '0.85rem' }}>
+                          {a.nombre?.[0]}{a.apellido_paterno?.[0]}
+                        </Avatar>
+                      </ListItemAvatar>
+                      <ListItemText
+                        primary={<Typography variant="body2" sx={{ fontWeight: 700, color: COLORS.ink }}>{a.nombre} {a.apellido_paterno} {a.apellido_materno || ''}</Typography>}
+                        secondary={<Typography variant="caption" sx={{ color: COLORS.purple }}>{a.edad ? `${a.edad} años` : ''} · {a.genero || ''} · {a.municipio || 'Sin municipio'}</Typography>}
+                      />
+                      <ChipEstado label={a.genero?.toLowerCase() === 'femenino' ? 'F' : 'M'} positivo={a.genero?.toLowerCase() === 'femenino'} />
+                    </ListItem>
+                    {i < atletasDelClub.length - 1 && <Divider sx={{ borderColor: COLORS.line }} />}
+                  </React.Fragment>
+                ))}
+              </List>
+            )}
+          </TarjetaSeccion>
+
+          {/* Próximos eventos */}
+          <TarjetaSeccion icon={<CalendarIcon sx={{ fontSize: 16 }} />} eyebrow="Agenda" title="Próximos Eventos">
+            {eventosProximos.length === 0 ? (
+              <Typography variant="body2" sx={{ color: COLORS.purple, textAlign: 'center', py: 4 }}>No hay eventos próximos.</Typography>
+            ) : (
+              <List disablePadding>
+                {eventosProximos.map((e, i) => (
+                  <React.Fragment key={e.id || i}>
+                    <ListItem sx={{ px: 0, py: 1.2, alignItems: 'flex-start' }}>
+                      <ListItemAvatar>
+                        <Avatar sx={{ bgcolor: COLORS.purple, width: 38, height: 38 }}>
+                          <EventIcon sx={{ fontSize: 18 }} />
+                        </Avatar>
+                      </ListItemAvatar>
+                      <ListItemText
+                        primary={<Typography variant="body2" sx={{ fontWeight: 700, color: COLORS.ink }}>{e.titulo}</Typography>}
+                        secondary={
+                          <Box>
+                            <Typography variant="caption" sx={{ color: COLORS.purple, display: 'flex', alignItems: 'center', gap: .5, mt: .3 }}>
+                              <CalendarIcon sx={{ fontSize: 13 }} /> {formatearFecha(e.fecha)}{e.hora && ` · ${String(e.hora).slice(0, 5)}`}
+                            </Typography>
+                            <Typography variant="caption" sx={{ color: COLORS.purple, display: 'flex', alignItems: 'center', gap: .5 }}>
+                              <LocationIcon sx={{ fontSize: 13 }} /> {e.lugar}
+                            </Typography>
+                          </Box>
+                        }
+                      />
+                      <ChipEstado label="Activo" positivo />
+                    </ListItem>
+                    {i < eventosProximos.length - 1 && <Divider sx={{ borderColor: COLORS.line }} />}
+                  </React.Fragment>
+                ))}
+              </List>
+            )}
+          </TarjetaSeccion>
+        </Box>
+
+        {/* Información profesional */}
+        <TarjetaSeccion icon={<SchoolIcon sx={{ fontSize: 16 }} />} eyebrow="Perfil" title="Información Profesional">
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: { xs: 2, md: 3 } }}>
+            <Box>
+              <Typography sx={{ fontSize: '0.65rem', color: COLORS.purple, fontWeight: 700, textTransform: 'uppercase', mb: 1 }}>
+                Especialidades
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: .8 }}>
+                {perfilEntrenador?.especialidades?.length > 0 ? (
+                  perfilEntrenador.especialidades.map((esp) => (
+                    <Chip
+                      key={esp.id} label={esp.nombre} size="small"
+                      icon={<FitnessIcon sx={{ fontSize: 14, color: `${COLORS.burgundy} !important` }} />}
+                      sx={{ bgcolor: 'transparent', border: `1px solid ${COLORS.burgundy}`, color: COLORS.burgundy, fontWeight: 600 }}
+                    />
+                  ))
+                ) : (
+                  <Typography variant="body2" sx={{ color: COLORS.purple }}>No especificadas</Typography>
+                )}
+              </Box>
+            </Box>
+
+            <Box>
+              <Typography sx={{ fontSize: '0.65rem', color: COLORS.purple, fontWeight: 700, textTransform: 'uppercase', mb: 1 }}>
+                Certificaciones
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: .8 }}>
+                {perfilEntrenador?.certificaciones?.length > 0 ? (
+                  perfilEntrenador.certificaciones.map((cert) => (
+                    <Chip
+                      key={cert.id} label={cert.nombre} size="small"
+                      icon={<SchoolIcon sx={{ fontSize: 14, color: `${COLORS.purple} !important` }} />}
+                      sx={{ bgcolor: 'transparent', border: `1px solid ${COLORS.purple}`, color: COLORS.purple, fontWeight: 600 }}
+                    />
+                  ))
+                ) : (
+                  <Typography variant="body2" sx={{ color: COLORS.purple }}>No especificadas</Typography>
+                )}
+              </Box>
+            </Box>
+
+            <Box>
+              <Typography sx={{ fontSize: '0.65rem', color: COLORS.purple, fontWeight: 700, textTransform: 'uppercase', mb: .5 }}>
+                Años de Experiencia
+              </Typography>
+              <Typography sx={{ color: COLORS.ink, fontWeight: 800, fontSize: '1.4rem' }}>
+                {perfilEntrenador?.anos_experiencia || '—'}
+                <Typography component="span" variant="body2" sx={{ color: COLORS.purple, ml: .5 }}>años</Typography>
+              </Typography>
+            </Box>
+
+            <Box>
+              <Typography sx={{ fontSize: '0.65rem', color: COLORS.purple, fontWeight: 700, textTransform: 'uppercase', mb: .5 }}>
+                Estado
+              </Typography>
+              <ChipEstado label={perfilEntrenador?.estado || 'Activo'} positivo />
+            </Box>
+          </Box>
+        </TarjetaSeccion>
+      </Container>
+    </Box>
+  );
+};
+
+export default PaginaPrincipalEntrenador;
