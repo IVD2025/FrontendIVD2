@@ -1,7 +1,7 @@
 import axios from 'axios'
 
 // URL del backend, tomada del .env; localhost solo como respaldo en desarrollo
-const BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
+const BASE = import.meta.env.VITE_API_URL || 'https://backendivd-mbok.onrender.com/api'
 
 export const api = axios.create({
   baseURL: BASE,
