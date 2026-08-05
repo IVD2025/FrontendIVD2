@@ -193,6 +193,8 @@ const EncabezadoAdministrativo = () => {
         .ivd-menu {
           display: flex;
           list-style: none;
+          flex-wrap: wrap;
+          justify-content: center;
           padding: 0px;
           margin: 0;
         }
@@ -205,8 +207,8 @@ const EncabezadoAdministrativo = () => {
         .ivd-link,
         .ivd-login-btn {
           display: block;
-          padding: 7px 24px 7px;
-          font-size: 1.02em;
+          padding: 7px 14px 7px;
+          font-size: 0.92em;
           font-weight: 500;
           color: #ffffff;
           text-transform: uppercase;
