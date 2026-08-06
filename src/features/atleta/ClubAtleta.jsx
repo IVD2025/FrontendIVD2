@@ -432,7 +432,7 @@ const ClubAtleta = () => {
     });
     if (!result.isConfirmed) return;
     try {
-      await atletasAPI.updateClub(perfil.id, { club_id: null });
+      await atletasAPI.salirClub();
       await cargarDatosCompletos();
     } catch (err) {
       console.error('Error al salir del club:', err);

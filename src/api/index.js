@@ -90,6 +90,7 @@ export const atletasAPI = {
   remove: (id) => api.delete(`/atletas/${id}`),
   crearSolicitud: (data) => api.post('/atletas/solicitudes-club', data),
   getSolicitudes: (params) => api.get('/atletas/solicitudes-club', { params }),
+  salirClub: () => api.post('/atletas/salir-club'),
   procesarSolicitud: (id, data) => api.put(`/atletas/solicitudes-club/${id}`, data),
   invitarClub: (id, data) => api.post(`/atletas/${id}/invitar-club`, data),
 }
