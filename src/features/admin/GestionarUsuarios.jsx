@@ -287,7 +287,7 @@ const GestionarUsuarios = () => {
       curp: usuario.curp || '',
       fecha_nacimiento: usuario.fecha_nacimiento ? usuario.fecha_nacimiento.split('T')[0] : '',
       estado_nacimiento: usuario.estado_nacimiento || '',
-      genero: usuario.genero || '',
+      genero: (usuario.genero || '').toLowerCase(),
       clubId: usuario.club_id ?? '',
       anos_experiencia: usuario.anos_experiencia ?? '',
     });
