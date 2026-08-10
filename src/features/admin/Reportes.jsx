@@ -173,26 +173,30 @@ const Reportes = () => {
       return;
     }
 
-    const datosExcel = resultadosFiltrados.map(resultado => ({
-      'CURP': resultado.curp || 'N/A',
-      'NOMBRE ATLETA': obtenerNombreCompleto(resultado),
-      'GÉNERO': resultado.genero || 'N/A',
-      'CATEGORIA': resultado.categoria || 'N/A',
-      'LUGAR': resultado.posicion ? `${resultado.posicion}°` : 'N/A',
-      'MUNICIPIO': resultado.municipio || 'N/A',
-      'CLUB': resultado.club_nombre || 'Independiente',
-      'AÑO COMPETITIVO': resultado.ano_competitivo || 'N/A',
-      'PRUEBA 1': resultado.pruebas?.[0]?.nombre || 'N/A',
-      'MARCA 1': resultado.pruebas?.[0]?.marca ? `${resultado.pruebas[0].marca}${resultado.pruebas[0].unidad ? ' ' + resultado.pruebas[0].unidad : ''}` : 'N/A',
-      'PRUEBA 2': resultado.pruebas?.[1]?.nombre || 'N/A',
-      'MARCA 2': resultado.pruebas?.[1]?.marca ? `${resultado.pruebas[1].marca}${resultado.pruebas[1].unidad ? ' ' + resultado.pruebas[1].unidad : ''}` : 'N/A',
-      'PRUEBA 3': resultado.pruebas?.[2]?.nombre || 'N/A',
-      'MARCA 3': resultado.pruebas?.[2]?.marca ? `${resultado.pruebas[2].marca}${resultado.pruebas[2].unidad ? ' ' + resultado.pruebas[2].unidad : ''}` : 'N/A',
-      'PRUEBA 4': resultado.pruebas?.[3]?.nombre || 'N/A',
-      'MARCA 4': resultado.pruebas?.[3]?.marca ? `${resultado.pruebas[3].marca}${resultado.pruebas[3].unidad ? ' ' + resultado.pruebas[3].unidad : ''}` : 'N/A',
-      'NOMBRE ENTRENADOR': resultado.entrenador_nombre ? `${resultado.entrenador_nombre} ${resultado.entrenador_apellido || ''}`.trim() : 'Independiente',
-      'LUGAR DE ENTRENAMIENTO': resultado.lugar_entrenamiento || 'N/A'
-    }));
+    const maxPruebas = resultadosFiltrados.reduce(
+      (max, r) => Math.max(max, r.pruebas?.length || 0), 0
+    );
+
+    const datosExcel = resultadosFiltrados.map(resultado => {
+      const fila = {
+        'CURP': resultado.curp || 'N/A',
+        'NOMBRE ATLETA': obtenerNombreCompleto(resultado),
+        'GÉNERO': resultado.genero || 'N/A',
+        'CATEGORIA': resultado.categoria || 'N/A',
+        'LUGAR': resultado.posicion ? `${resultado.posicion}°` : 'N/A',
+        'MUNICIPIO': resultado.municipio || 'N/A',
+        'CLUB': resultado.club_nombre || 'Independiente',
+        'AÑO COMPETITIVO': resultado.ano_competitivo || 'N/A',
+      };
+      for (let i = 0; i < maxPruebas; i++) {
+        const prueba = resultado.pruebas?.[i];
+        fila[`PRUEBA ${i + 1}`] = prueba?.nombre || 'N/A';
+        fila[`MARCA ${i + 1}`] = prueba?.marca ? `${prueba.marca}${prueba.unidad ? ' ' + prueba.unidad : ''}` : 'N/A';
+      }
+      fila['NOMBRE ENTRENADOR'] = resultado.entrenador_nombre ? `${resultado.entrenador_nombre} ${resultado.entrenador_apellido || ''}`.trim() : 'Independiente';
+      fila['LUGAR DE ENTRENAMIENTO'] = resultado.lugar_entrenamiento || 'N/A';
+      return fila;
+    });
 
     const ws = XLSX.utils.json_to_sheet(datosExcel);
     const wb = XLSX.utils.book_new();
