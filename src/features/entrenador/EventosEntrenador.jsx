@@ -12,7 +12,7 @@ import {
   CalendarToday as CalendarIcon, LocationOn as LocationIcon,
   AccessTime as TimeIcon,
   Event as EventIcon, Info as InfoIcon,
-  ArrowBack as ArrowBackIcon, EmojiEvents as TrophyIcon,
+  ArrowBack as ArrowBackIcon, PictureAsPdf as PdfIcon,
   DoneAll as DoneAllIcon, Visibility as VisibilityIcon,
   HourglassEmpty as PendingIcon, Clear as ClearIcon,
   People as PeopleIcon,
@@ -21,7 +21,8 @@ import {
 import { eventosAPI, resultadosAPI } from '../../api/index.js';
 import { useAuth } from '../../components/common/AuthContext.jsx';
 import { useNavigate } from 'react-router-dom';
-import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const COLORS = {
   burgundy: '#800020',
@@ -69,7 +70,6 @@ const DISCIPLINAS_DISTANCIA = new Set([
   'Lanzamiento de bala', 'Lanzamiento de disco', 'Lanzamiento de jabalina',
 ]);
 const esDisciplinaDeDistancia = (disciplina) => DISCIPLINAS_DISTANCIA.has((disciplina || '').trim());
-const slug = (s) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]+/g, '_');
 const nombreCompleto = (r) => [r?.nombre, r?.apellido_paterno, r?.apellido_materno].filter(Boolean).join(' ');
 
 const EventosEntrenador = () => {
@@ -212,7 +212,8 @@ const EventosEntrenador = () => {
     setParticipantes([]);
   };
 
-  const handleDescargarExcelResultados = (conv) => {
+  // Genera un PDF con los resultados de una convocatoria y lo abre en una pestaña nueva
+  const manejarVerPdfResultados = (conv) => {
     const resultadosCategoria = resultadosPorConvocatoria[conv.id] || [];
     if (resultadosCategoria.length === 0) return;
 
@@ -229,28 +230,37 @@ const EventosEntrenador = () => {
       const marca = r.pruebas?.find((p) => p.nombre === 'Marca')?.marca;
       const chip = r.pruebas?.find((p) => p.nombre === 'ChipTime')?.marca;
       const gun = r.pruebas?.find((p) => p.nombre === 'GunTime')?.marca;
-      const base = {
-        'Pl.': r.posicion ? `${r.posicion}°` : '—',
-        Bib: r.bib ? String(r.bib).padStart(3, '0') : '—',
-        Nombre: nombreCompleto(r),
-        Club: r.club_nombre || 'Libre',
-      };
-      return esDistancia ? { ...base, Marca: marca || '—' } : { ...base, ChipTime: chip || '—', GunTime: gun || '—' };
+      const base = [
+        r.posicion ? `${r.posicion}°` : '—',
+        r.bib ? String(r.bib).padStart(3, '0') : '—',
+        nombreCompleto(r),
+        r.club_nombre || 'Libre',
+      ];
+      return esDistancia ? [...base, marca || '—'] : [...base, chip || '—', gun || '—'];
     });
 
     const headers = esDistancia
       ? ['Pl.', 'Bib', 'Nombre', 'Club', 'Marca']
       : ['Pl.', 'Bib', 'Nombre', 'Club', 'ChipTime', 'GunTime'];
 
-    const ws = XLSX.utils.json_to_sheet(filas, { header: headers });
-    ws['!cols'] = esDistancia
-      ? [{ wch: 6 }, { wch: 8 }, { wch: 30 }, { wch: 22 }, { wch: 14 }]
-      : [{ wch: 6 }, { wch: 8 }, { wch: 30 }, { wch: 22 }, { wch: 12 }, { wch: 12 }];
+    const doc = new jsPDF({ orientation: 'landscape' });
 
-    const wb = XLSX.utils.book_new();
-    const nombreHoja = `${disciplinaNombre} ${categoriaNombre}`.slice(0, 31);
-    XLSX.utils.book_append_sheet(wb, ws, nombreHoja || 'Resultados');
-    XLSX.writeFile(wb, `Resultados_${slug(disciplinaNombre)}_${slug(categoriaNombre)}.xlsx`);
+    doc.setFontSize(14);
+    doc.setTextColor(COLORS.burgundy);
+    doc.text(`${disciplinaNombre} — ${categoriaNombre}`, 14, 16);
+
+    doc.setFontSize(10);
+    doc.setTextColor('#666666');
+    doc.text(eventoSeleccionado?.titulo || '', 14, 22);
+
+    autoTable(doc, {
+      startY: 28,
+      head: [headers],
+      body: filas,
+      headStyles: { fillColor: [128, 0, 32] },
+      styles: { fontSize: 10 },
+    });
+    window.open(doc.output('bloburl'), '_blank');
   };
 
   if (loading) {
@@ -423,14 +433,14 @@ const EventosEntrenador = () => {
                             {terminado && (
                               (resultadosPorConvocatoria[conv.id] || []).length > 0 ? (
                                 <Button
-                                  size="small" variant="contained" startIcon={<TrophyIcon />}
-                                  onClick={() => handleDescargarExcelResultados(conv)}
+                                  size="small" variant="contained" startIcon={<PdfIcon />}
+                                  onClick={() => manejarVerPdfResultados(conv)}
                                   sx={{ bgcolor: COLORS.burgundy, '&:hover': { bgcolor: COLORS.burgundyDark }, textTransform: 'none', fontWeight: 700 }}
                                 >
-                                  Ver Excel
+                                  Ver PDF
                                 </Button>
                               ) : (
-                                <Chip icon={<PendingIcon sx={{ fontSize: 16 }} />} label="Excel de resultados pendiente" size="small" sx={{ bgcolor: 'transparent', border: `1px solid ${COLORS.line}`, color: COLORS.ink }} />
+                                <Chip icon={<PendingIcon sx={{ fontSize: 16 }} />} label="Resultados pendientes" size="small" sx={{ bgcolor: 'transparent', border: `1px solid ${COLORS.line}`, color: COLORS.ink }} />
                               )
                             )}
                             <Button
@@ -552,17 +562,12 @@ const EventosEntrenador = () => {
             mt: { xs: -5, md: -6 }, mb: { xs: 3, md: 5 },
             bgcolor: COLORS.paper, borderRadius: '10px',
             boxShadow: '0 10px 28px #00000024',
-            display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)',
+            display: 'grid', gridTemplateColumns: '1fr 1fr',
             overflow: 'hidden',
           }}
         >
           <Box sx={{ p: { xs: 2, md: 2.75 }, textAlign: 'center', borderRight: `1px solid ${COLORS.line}` }}>
-            <Box sx={{ color: COLORS.burgundy, mb: 0.5, display: 'flex', justifyContent: 'center' }}><EventIcon sx={{ fontSize: 24 }} /></Box>
-            <Typography sx={{ fontWeight: 800, color: COLORS.ink, lineHeight: 1.1, fontSize: { xs: '1.4rem', md: '1.7rem' } }}>{eventosDisponibles.length}</Typography>
-            <Typography sx={{ fontSize: '0.72rem', color: COLORS.ink, fontWeight: 700, mt: 0.2 }}>Disponibles</Typography>
-          </Box>
-          <Box sx={{ p: { xs: 2, md: 2.75 }, textAlign: 'center', borderRight: `1px solid ${COLORS.line}` }}>
-            <Box sx={{ color: COLORS.purple, mb: 0.5, display: 'flex', justifyContent: 'center' }}><TrophyIcon sx={{ fontSize: 24 }} /></Box>
+            <Box sx={{ color: COLORS.purple, mb: 0.5, display: 'flex', justifyContent: 'center' }}><EventIcon sx={{ fontSize: 24 }} /></Box>
             <Typography sx={{ fontWeight: 800, color: COLORS.ink, lineHeight: 1.1, fontSize: { xs: '1.4rem', md: '1.7rem' } }}>{totalAbiertos}</Typography>
             <Typography sx={{ fontSize: '0.72rem', color: COLORS.ink, fontWeight: 700, mt: 0.2 }}>Con Inscripción Abierta</Typography>
           </Box>
