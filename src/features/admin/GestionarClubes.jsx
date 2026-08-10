@@ -302,7 +302,7 @@ const GestionClubesAdmin = () => {
   // Confirma la eliminación del club
   const manejarEliminarConfirmar = async () => {
     try {
-      await clubesAPI.delete(clubAEliminar.id);
+      await clubesAPI.remove(clubAEliminar.id);
       setExito('Club eliminado correctamente');
       setModalEliminarAbierto(false);
       setClubAEliminar(null);
